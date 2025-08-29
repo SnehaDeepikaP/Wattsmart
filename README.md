@@ -25,17 +25,15 @@ Wattsmart flips the script by answering **three key questions**:
 
 ---
 
-## 🧰 Tech Behind the Magic
-Frontend: HTML, CSS, Bootstrap
-Backend: Python, Flask
-ML Model: Scikit-learn (RandomForestRegressor)
+## 🧰 Tech Stack
+-Frontend: HTML, CSS, Bootstrap
+-Backend: Python, Flask
+-ML Model: Scikit-learn (RandomForestRegressor)
 
 ---
-
-## 🚀 Getting Started
 
 ### Prerequisites
 - Python 3.8+  
 - Browser (Chrome/Firefox)  
-- Dataset (`energy_data.csv`) with:  
+- Dataset with:  
   `lights, T_in, RH_in, T_out, Windspeed, Appliances`
