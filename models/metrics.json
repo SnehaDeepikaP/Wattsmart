@@ -1,0 +1,90 @@
+{
+  "model_type": "XGBRegressor",
+  "pipeline_steps": [
+    "XGBRegressor"
+  ],
+  "hyperparameters": {
+    "n_estimators": 200.0,
+    "max_depth": 5.0,
+    "learning_rate": 0.05333252749469168,
+    "subsample": 0.9,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.04051120826998022,
+    "reg_lambda": 0.015049190913810441
+  },
+  "training_timestamp_utc": "2026-10-17T08:02:19.768479+00:00",
+  "random_state": 42,
+  "dataset_info": {
+    "start_date": "2016-01-11 00:00:00",
+    "end_date": "2016-01-24 16:54:00",
+    "raw_rows": 19735,
+    "resampled_rows": 1974,
+    "resampling_frequency": "10min",
+    "train_rows": 1569,
+    "test_rows": 393,
+    "features_count": 39
+  },
+  "conformal_prediction": {
+    "confidence_level": 0.9,
+    "residual_radius_wh": 19.34,
+    "method": "split_conformal_quantile"
+  },
+  "metrics": {
+    "mae": 9.58,
+    "rmse": 12.04,
+    "r2": 0.6688,
+    "mape": 5.54,
+    "smape": 5.49
+  },
+  "model_comparison": {
+    "Mean Baseline": {
+      "mae": 24.16,
+      "rmse": 28.76,
+      "r2": -0.8881,
+      "mape": 13.17,
+      "smape": 14.17
+    },
+    "Persistence Baseline": {
+      "mae": 15.12,
+      "rmse": 19.05,
+      "r2": 0.1714,
+      "mape": 8.75,
+      "smape": 8.67
+    },
+    "Ridge": {
+      "mae": 12.5,
+      "rmse": 15.85,
+      "r2": 0.4261,
+      "mape": 7.24,
+      "smape": 7.13
+    },
+    "RandomForest": {
+      "mae": 9.76,
+      "rmse": 12.41,
+      "r2": 0.6484,
+      "mape": 5.64,
+      "smape": 5.59
+    },
+    "LightGBM": {
+      "mae": 9.61,
+      "rmse": 12.12,
+      "r2": 0.6644,
+      "mape": 5.54,
+      "smape": 5.49
+    },
+    "XGBoost": {
+      "mae": 9.51,
+      "rmse": 12.13,
+      "r2": 0.6639,
+      "mape": 5.49,
+      "smape": 5.44
+    },
+    "Tuned_XGBoost (Final)": {
+      "mae": 9.58,
+      "rmse": 12.04,
+      "r2": 0.6688,
+      "mape": 5.54,
+      "smape": 5.49
+    }
+  }
+}

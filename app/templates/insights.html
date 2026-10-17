@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Data Insights & Anomaly Analysis - Wattsmart 2.0{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-lg-8">
+      <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-bar-chart-line text-primary"></i> Data Insights & Operational Profiles
+      </h2>
+      <p class="text-body-secondary mb-0">
+        Empirical energy demand patterns, peak demand windows, and outlier consumption spikes computed strictly from Belgian smart meter telemetry.
+      </p>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row -->
+  <div class="row g-3 mb-4">
+    <!-- Peak Hours Card -->
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+        <div class="text-danger small fw-semibold text-uppercase d-flex align-items-center gap-1">
+          <i class="bi bi-fire"></i> Peak Demand Hours
+        </div>
+        <div class="mt-2" id="peakHoursContainer">
+          <span class="spinner-border spinner-border-sm text-secondary"></span>
+        </div>
+        <div class="small text-muted mt-2">Hours where mean consumption is in the top 25th percentile.</div>
+      </div>
+    </div>
+
+    <!-- Off-Peak Hours Card -->
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+        <div class="text-success small fw-semibold text-uppercase d-flex align-items-center gap-1">
+          <i class="bi bi-moon-stars"></i> Off-Peak Low Hours
+        </div>
+        <div class="mt-2" id="offPeakHoursContainer">
+          <span class="spinner-border spinner-border-sm text-secondary"></span>
+        </div>
+        <div class="small text-muted mt-2">Lowest baseline appliance demand (overnight hours).</div>
+      </div>
+    </div>
+
+    <!-- Average Dataset Demand -->
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+        <div class="text-body-secondary small fw-semibold text-uppercase">Mean Appliance Draw</div>
+        <div class="fs-2 fw-bold text-primary mt-1">
+          <span id="statMeanWh">--</span> <span class="fs-6 text-muted">Wh / 10-min</span>
+        </div>
+        <div class="small text-muted mt-1">Std dev: ±<span id="statStdWh">--</span> Wh</div>
+      </div>
+    </div>
+
+    <!-- Telemetry Span -->
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+        <div class="text-body-secondary small fw-semibold text-uppercase">Dataset Temporal Span</div>
+        <div class="fs-2 fw-bold text-body mt-1">
+          <span id="statSpanDays">--</span> <span class="fs-6 text-muted">Days</span>
+        </div>
+        <div class="small text-muted mt-1"><span id="statTotalRows">--</span> total observations</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="row g-4 mb-4">
+    <!-- Hourly Profile -->
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-body border-bottom py-3">
+          <h5 class="card-title mb-0 fw-semibold">
+            <i class="bi bi-clock-history text-primary me-2"></i> Diurnal Hourly Profile (Wh Average)
+          </h5>
+        </div>
+        <div class="card-body p-4" style="height: 340px;">
+          <canvas id="hourlyProfileChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Day-of-Week Profile -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-body border-bottom py-3">
+          <h5 class="card-title mb-0 fw-semibold">
+            <i class="bi bi-calendar3 text-primary me-2"></i> Weekly Demand Profile
+          </h5>
+        </div>
+        <div class="card-body p-4" style="height: 340px;">
+          <canvas id="dowProfileChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Anomaly Spikes Table -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-body border-bottom py-3 d-flex justify-content-between align-items-center">
+      <h5 class="card-title mb-0 fw-semibold">
+        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i> Detected Consumption Anomaly Spikes
+      </h5>
+      <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+        Method: IsolationForest + Z-Score (Z > 2.0)
+      </span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th scope="col" class="ps-4">Timestamp</th>
+              <th scope="col">Peak Consumption</th>
+              <th scope="col">Z-Score</th>
+              <th scope="col">Indoor Temp</th>
+              <th scope="col">Outdoor Temp</th>
+              <th scope="col">Windspeed</th>
+              <th scope="col" class="pe-4">Potential Driver</th>
+            </tr>
+          </thead>
+          <tbody id="anomaliesTableBody">
+            <!-- Populated via API -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  let hourlyChart = null;
+  let dowChart = null;
+
+  try {
+    const resp = await fetch("/api/insights");
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.message || "Failed to load insights");
+
+    const insights = json.insights;
+    const summary = insights.summary;
+
+    // Set summary stats
+    document.getElementById("statMeanWh").textContent = summary.appliances.mean_wh.toFixed(1);
+    document.getElementById("statStdWh").textContent = summary.appliances.std_wh.toFixed(1);
+    document.getElementById("statSpanDays").textContent = summary.date_range.span_days;
+    document.getElementById("statTotalRows").textContent = summary.total_records.toLocaleString();
+
+    // Render Peak & Off-Peak Badges
+    const peakCont = document.getElementById("peakHoursContainer");
+    peakCont.innerHTML = "";
+    insights.peak_hours.forEach(h => {
+      const span = document.createElement("span");
+      span.className = "badge bg-danger-subtle text-danger border border-danger-subtle me-1 mb-1 fs-6";
+      span.textContent = `${h.toString().padStart(2, '0')}:00`;
+      peakCont.appendChild(span);
+    });
+
+    const offPeakCont = document.getElementById("offPeakHoursContainer");
+    offPeakCont.innerHTML = "";
+    insights.off_peak_hours.forEach(h => {
+      const span = document.createElement("span");
+      span.className = "badge bg-success-subtle text-success border border-success-subtle me-1 mb-1 fs-6";
+      span.textContent = `${h.toString().padStart(2, '0')}:00`;
+      offPeakCont.appendChild(span);
+    });
+
+    // Theme settings for Chart.js
+    const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+    const gridColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.06)";
+    const textColor = isDark ? "#dee2e6" : "#495057";
+
+    // Hourly Profile Chart
+    const hourlyLabels = insights.hourly_profile.map(p => p.hour_label);
+    const hourlyMeans = insights.hourly_profile.map(p => p.mean_wh);
+    const hourlyMins = insights.hourly_profile.map(p => p.min_wh);
+    const hourlyMaxs = insights.hourly_profile.map(p => p.max_wh);
+
+    const ctxHourly = document.getElementById("hourlyProfileChart").getContext("2d");
+    hourlyChart = new Chart(ctxHourly, {
+      type: "bar",
+      data: {
+        labels: hourlyLabels,
+        datasets: [{
+          label: "Mean Consumption (Wh)",
+          data: hourlyMeans,
+          backgroundColor: hourlyMeans.map((v, i) => insights.peak_hours.includes(i) ? "rgba(220, 53, 69, 0.75)" : "rgba(13, 110, 253, 0.7)"),
+          borderColor: hourlyMeans.map((v, i) => insights.peak_hours.includes(i) ? "#dc3545" : "#0d6efd"),
+          borderWidth: 1,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `Mean: ${ctx.parsed.y.toFixed(1)} Wh`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor } },
+          y: { grid: { color: gridColor }, ticks: { color: textColor }, title: { display: true, text: "Mean Wh", color: textColor } }
+        }
+      }
+    });
+
+    // Day of Week Chart
+    const dowLabels = insights.day_of_week_profile.map(p => p.day_name);
+    const dowMeans = insights.day_of_week_profile.map(p => p.mean_wh);
+
+    const ctxDow = document.getElementById("dowProfileChart").getContext("2d");
+    dowChart = new Chart(ctxDow, {
+      type: "line",
+      data: {
+        labels: dowLabels,
+        datasets: [{
+          label: "Average Daily Demand (Wh)",
+          data: dowMeans,
+          borderColor: "#20c997",
+          backgroundColor: "rgba(32, 201, 151, 0.15)",
+          borderWidth: 2.5,
+          tension: 0.3,
+          fill: true,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `Mean: ${ctx.parsed.y.toFixed(1)} Wh`
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor } },
+          y: { grid: { color: gridColor }, ticks: { color: textColor }, title: { display: true, text: "Mean Wh", color: textColor } }
+        }
+      }
+    });
+
+    // Anomaly Spikes Table
+    const tbody = document.getElementById("anomaliesTableBody");
+    tbody.innerHTML = "";
+    insights.anomaly_spikes.forEach(item => {
+      const tr = document.createElement("tr");
+      let driver = "Simultaneous Major Cooking / Heating Appliance Burst";
+      if (item.windspeed > 8) driver = "High Wind Infiltration / Aux Heater Spike";
+      if (item.indoor_temp > 23) driver = "Thermostat Heating Surge";
+
+      tr.innerHTML = `
+        <td class="ps-4 fw-semibold">${escapeHtml(item.timestamp)}</td>
+        <td class="fw-bold text-danger">${item.appliances_wh.toFixed(1)} Wh</td>
+        <td><span class="badge bg-danger-subtle text-danger border border-danger-subtle">+${item.z_score.toFixed(2)} σ</span></td>
+        <td>${item.indoor_temp.toFixed(1)} °C</td>
+        <td>${item.outdoor_temp.toFixed(1)} °C</td>
+        <td>${item.windspeed.toFixed(1)} m/s</td>
+        <td class="pe-4 text-muted small">${driver}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    showAlert(err.message, "danger");
+  }
+});
+</script>
+{% endblock %}

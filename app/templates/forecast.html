@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Multi-Hour Forecast - Wattsmart 2.0{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+  <!-- Header -->
+  <div class="row mb-4 align-items-center">
+    <div class="col-lg-8">
+      <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-graph-up-arrow text-primary"></i> Multi-Hour Autoregressive Forecast
+      </h2>
+      <p class="text-body-secondary mb-0">
+        Simulate forward energy demand up to 24 hours ahead using rolling autoregressive features and 90% confidence bands.
+      </p>
+    </div>
+    <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+      <div class="btn-group shadow-sm" role="group" aria-label="Forecast horizon selection">
+        <button type="button" class="btn btn-outline-primary btn-sm horizon-btn active" data-hours="6">6 Hours</button>
+        <button type="button" class="btn btn-outline-primary btn-sm horizon-btn" data-hours="12">12 Hours</button>
+        <button type="button" class="btn btn-outline-primary btn-sm horizon-btn" data-hours="18">18 Hours</button>
+        <button type="button" class="btn btn-outline-primary btn-sm horizon-btn" data-hours="24">24 Hours</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Metric Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary">
+        <div class="text-body-secondary small fw-semibold text-uppercase">Mean Projected Demand</div>
+        <div class="fs-2 fw-bold text-primary mt-1">
+          <span id="forecastMeanWh">--</span> <span class="fs-6 text-muted">Wh / 10-min</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary">
+        <div class="text-body-secondary small fw-semibold text-uppercase">Peak Interval Projected</div>
+        <div class="fs-2 fw-bold text-danger mt-1">
+          <span id="forecastPeakWh">--</span> <span class="fs-6 text-muted">Wh</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary">
+        <div class="text-body-secondary small fw-semibold text-uppercase">Cumulative Total Horizon</div>
+        <div class="fs-2 fw-bold text-success mt-1">
+          <span id="forecastTotalKWh">--</span> <span class="fs-6 text-muted">kWh</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart Card -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-body border-bottom py-3 d-flex justify-content-between align-items-center">
+      <h5 class="card-title mb-0 fw-semibold">
+        <i class="bi bi-activity text-primary me-2"></i> Forward Telemetry Projection with 90% Conformal Band
+      </h5>
+      <span class="badge bg-secondary-subtle text-secondary" id="forecastHorizonBadge">
+        12-Hour Horizon (10-min resolution)
+      </span>
+    </div>
+    <div class="card-body p-4 position-relative" style="min-height: 380px;">
+      <!-- Chart Loading Spinner -->
+      <div id="forecastLoading" class="position-absolute top-50 start-50 translate-middle text-center d-none">
+        <div class="spinner-border text-primary" role="status"></div>
+        <div class="small text-muted mt-2">Computing autoregressive trajectory...</div>
+      </div>
+      <canvas id="forecastChart" height="110"></canvas>
+    </div>
+  </div>
+
+  <!-- Forecast Table -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-body border-bottom py-3">
+      <h5 class="card-title mb-0 fw-semibold">
+        <i class="bi bi-table text-primary me-2"></i> Interval Breakdown Table
+      </h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive" style="max-height: 350px;">
+        <table class="table table-hover table-striped align-middle mb-0" id="forecastTable">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th scope="col" class="ps-4">Timestamp (UTC)</th>
+              <th scope="col">Forecast (Wh)</th>
+              <th scope="col">Lower 90% Bound (Wh)</th>
+              <th scope="col">Upper 90% Bound (Wh)</th>
+              <th scope="col" class="pe-4">Demand Level</th>
+            </tr>
+          </thead>
+          <tbody id="forecastTableBody">
+            <!-- Populated via API -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  let forecastChart = null;
+  const horizonBtns = document.querySelectorAll(".horizon-btn");
+
+  async function loadForecast(hours) {
+    const loading = document.getElementById("forecastLoading");
+    loading.classList.remove("d-none");
+    document.getElementById("forecastHorizonBadge").textContent = `${hours}-Hour Horizon (10-min resolution)`;
+
+    try {
+      const resp = await fetch("/api/forecast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours: hours }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.message || "Forecast fetch failed");
+
+      const series = json.forecast.series;
+      const labels = series.map(s => s.timestamp.split(" ")[1]);
+      const points = series.map(s => s.prediction_wh);
+      const lower = series.map(s => s.lower_wh);
+      const upper = series.map(s => s.upper_wh);
+
+      // Summary metrics
+      const mean = points.reduce((a, b) => a + b, 0) / points.length;
+      const peak = Math.max(...points);
+      // Resampling is 10 min: each point is Wh in that 10 min, so sum of Wh / 6 is Wh over hour, / 1000 is kWh
+      // In this dataset Appliances is Wh per interval: total Wh = sum of readings
+      const totalWh = points.reduce((a, b) => a + b, 0);
+      const totalKWh = totalWh / 1000.0;
+
+      document.getElementById("forecastMeanWh").textContent = mean.toFixed(1);
+      document.getElementById("forecastPeakWh").textContent = peak.toFixed(1);
+      document.getElementById("forecastTotalKWh").textContent = totalKWh.toFixed(2);
+
+      // Render Table
+      const tbody = document.getElementById("forecastTableBody");
+      tbody.innerHTML = "";
+      series.forEach(item => {
+        const tr = document.createElement("tr");
+        let badgeClass = "bg-secondary";
+        let levelText = "Moderate";
+        if (item.prediction_wh > 180) {
+          badgeClass = "bg-danger";
+          levelText = "High / Peak";
+        } else if (item.prediction_wh < 140) {
+          badgeClass = "bg-success";
+          levelText = "Off-Peak / Low";
+        }
+        tr.innerHTML = `
+          <td class="ps-4 fw-semibold">${escapeHtml(item.timestamp)}</td>
+          <td class="fw-bold text-primary">${item.prediction_wh.toFixed(1)}</td>
+          <td class="text-muted">${item.lower_wh.toFixed(1)}</td>
+          <td class="text-muted">${item.upper_wh.toFixed(1)}</td>
+          <td class="pe-4"><span class="badge ${badgeClass}">${levelText}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Render Chart.js
+      const ctx = document.getElementById("forecastChart").getContext("2d");
+      if (forecastChart) {
+        forecastChart.destroy();
+      }
+
+      const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+      const gridColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.06)";
+      const textColor = isDark ? "#dee2e6" : "#495057";
+
+      forecastChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: "Predicted Demand (Wh)",
+              data: points,
+              borderColor: "#0d6efd",
+              backgroundColor: "#0d6efd",
+              borderWidth: 2.5,
+              tension: 0.3,
+              pointRadius: 3,
+              pointHoverRadius: 6,
+              fill: false,
+              zIndex: 10,
+            },
+            {
+              label: "Upper 90% Bound (Wh)",
+              data: upper,
+              borderColor: "rgba(13, 202, 240, 0.4)",
+              backgroundColor: "rgba(13, 202, 240, 0.12)",
+              borderWidth: 1,
+              borderDash: [4, 4],
+              pointRadius: 0,
+              fill: "+1", // Fill down to lower bound
+            },
+            {
+              label: "Lower 90% Bound (Wh)",
+              data: lower,
+              borderColor: "rgba(13, 202, 240, 0.4)",
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderDash: [4, 4],
+              pointRadius: 0,
+              fill: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
+          plugins: {
+            legend: {
+              labels: { color: textColor },
+            },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} Wh`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: gridColor },
+              ticks: { color: textColor },
+            },
+            y: {
+              grid: { color: gridColor },
+              ticks: { color: textColor },
+              title: {
+                display: true,
+                text: "Consumption (Wh / 10-min)",
+                color: textColor,
+              }
+            }
+          }
+        }
+      });
+    } catch (err) {
+      showAlert(err.message, "danger");
+    } finally {
+      loading.classList.add("d-none");
+    }
+  }
+
+  horizonBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      horizonBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      loadForecast(parseInt(btn.getAttribute("data-hours")));
+    });
+  });
+
+  // Initial load: 12 hours
+  loadForecast(12);
+});
+</script>
+{% endblock %}

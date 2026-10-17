@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}Predict Consumption & Smart Coaching - Wattsmart 2.0{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-lg-8">
+      <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-cpu text-primary"></i> Live Appliance Energy Prediction
+      </h2>
+      <p class="text-body-secondary mb-0">
+        Estimate 10-minute household appliance demand with calibrated 90% conformal confidence intervals and counterfactual savings recommendations.
+      </p>
+    </div>
+    <div class="col-lg-4 text-lg-end d-flex align-items-center justify-content-lg-end gap-2 mt-3 mt-lg-0">
+      <button type="button" id="btnFillPreset" class="btn btn-outline-secondary btn-sm rounded-pill">
+        <i class="bi bi-magic me-1"></i> Load Typical Belgian Winter Preset
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Input Form Column -->
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-body border-bottom py-3">
+          <h5 class="card-title mb-0 fw-semibold">
+            <i class="bi bi-sliders2 text-primary me-2"></i> Environmental & Operational Inputs
+          </h5>
+        </div>
+        <div class="card-body p-4">
+          <form id="predictForm" novalidate>
+
+            <div class="row g-3">
+              <!-- Indoor Temperature -->
+              <div class="col-sm-6">
+                <label for="indoor_temp" class="form-label fw-semibold small">
+                  Indoor Temp (T_in) <span class="badge bg-secondary-subtle text-secondary">°C</span>
+                </label>
+                <input type="number" step="0.1" class="form-control" id="indoor_temp" name="indoor_temp" value="21.0" min="-10" max="45" required>
+                <div class="form-text">Living room & kitchen average (15°C - 26°C typical).</div>
+              </div>
+
+              <!-- Indoor Humidity -->
+              <div class="col-sm-6">
+                <label for="indoor_humidity" class="form-label fw-semibold small">
+                  Indoor Humidity (RH_in) <span class="badge bg-secondary-subtle text-secondary">%</span>
+                </label>
+                <input type="number" step="0.5" class="form-control" id="indoor_humidity" name="indoor_humidity" value="45.0" min="5" max="95" required>
+                <div class="form-text">Comfort zone: 35% - 60%.</div>
+              </div>
+
+              <!-- Outdoor Temperature -->
+              <div class="col-sm-6">
+                <label for="outdoor_temp" class="form-label fw-semibold small">
+                  Outdoor Temp (T_out) <span class="badge bg-secondary-subtle text-secondary">°C</span>
+                </label>
+                <input type="number" step="0.1" class="form-control" id="outdoor_temp" name="outdoor_temp" value="6.0" min="-30" max="50" required>
+                <div class="form-text">Weather station telemetry.</div>
+              </div>
+
+              <!-- Outdoor Humidity -->
+              <div class="col-sm-6">
+                <label for="outdoor_humidity" class="form-label fw-semibold small">
+                  Outdoor Humidity (RH_out) <span class="badge bg-secondary-subtle text-secondary">%</span>
+                </label>
+                <input type="number" step="0.5" class="form-control" id="outdoor_humidity" name="outdoor_humidity" value="82.0" min="5" max="100" required>
+                <div class="form-text">Atmospheric relative humidity.</div>
+              </div>
+
+              <!-- Windspeed -->
+              <div class="col-sm-6">
+                <label for="windspeed" class="form-label fw-semibold small">
+                  Windspeed <span class="badge bg-secondary-subtle text-secondary">m/s</span>
+                </label>
+                <input type="number" step="0.1" class="form-control" id="windspeed" name="windspeed" value="4.0" min="0" max="50" required>
+                <div class="form-text">Chilling & infiltration coefficient.</div>
+              </div>
+
+              <!-- Pressure -->
+              <div class="col-sm-6">
+                <label for="pressure" class="form-label fw-semibold small">
+                  Pressure <span class="badge bg-secondary-subtle text-secondary">mm Hg</span>
+                </label>
+                <input type="number" step="0.1" class="form-control" id="pressure" name="pressure" value="755.0" min="650" max="850" required>
+                <div class="form-text">Standard: 750 - 765 mm Hg.</div>
+              </div>
+
+              <!-- Hour of Day -->
+              <div class="col-sm-6">
+                <label for="hour" class="form-label fw-semibold small">
+                  Hour of Day <span class="badge bg-secondary-subtle text-secondary">0 - 23</span>
+                </label>
+                <select class="form-select" id="hour" name="hour" required>
+                  {% for h in range(24) %}
+                  <option value="{{ h }}" {% if h == 18 %}selected{% endif %}>{{ "%02d:00"|format(h) }}</option>
+                  {% endfor %}
+                </select>
+                <div class="form-text">Peak residential hours: 17:00 - 21:00.</div>
+              </div>
+
+              <!-- Day of Week -->
+              <div class="col-sm-6">
+                <label for="day_of_week" class="form-label fw-semibold small">
+                  Day of Week
+                </label>
+                <select class="form-select" id="day_of_week" name="day_of_week" required>
+                  <option value="0">Monday</option>
+                  <option value="1">Tuesday</option>
+                  <option value="2" selected>Wednesday</option>
+                  <option value="3">Thursday</option>
+                  <option value="4">Friday</option>
+                  <option value="5">Saturday (Weekend)</option>
+                  <option value="6">Sunday (Weekend)</option>
+                </select>
+                <div class="form-text">Captures weekend occupancy shift.</div>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-2">
+              <button type="submit" id="btnPredictSubmit" class="btn btn-primary w-100 py-2 fw-semibold d-flex align-items-center justify-content-center gap-2">
+                <span id="predictSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                <i id="predictIcon" class="bi bi-lightning-charge-fill"></i>
+                <span id="predictBtnText">Generate Prediction & Recommendations</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results & Recommendations Column -->
+    <div class="col-lg-6">
+      <!-- Loading State -->
+      <div id="resultLoading" class="card shadow-sm border-0 h-100 d-none text-center p-5">
+        <div class="my-auto">
+          <div class="spinner-grow text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <h5 class="mt-3 fw-semibold">Evaluating Ensemble Pipeline...</h5>
+          <p class="text-muted small">Generating conformal prediction interval & counterfactual advice</p>
+        </div>
+      </div>
+
+      <!-- Initial Prompt Placeholder -->
+      <div id="resultPlaceholder" class="card shadow-sm border-0 h-100 text-center p-5">
+        <div class="my-auto">
+          <i class="bi bi-speedometer2 text-body-tertiary display-3 mb-3"></i>
+          <h5 class="fw-semibold">Ready to Predict Energy Demand</h5>
+          <p class="text-body-secondary small mx-auto" style="max-width: 380px;">
+            Adjust the environmental sensor parameters and click <strong>Generate Prediction</strong> to inspect forecasted demand with 90% confidence bounds.
+          </p>
+        </div>
+      </div>
+
+      <!-- Real Result Display -->
+      <div id="resultCard" class="card shadow-sm border-0 h-100 d-none">
+        <div class="card-header bg-body border-bottom py-3 d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0 fw-semibold text-success">
+            <i class="bi bi-check2-circle me-1"></i> Prediction Telemetry
+          </h5>
+          <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+            Status: Active
+          </span>
+        </div>
+        <div class="card-body p-4">
+
+          <!-- Metric Display -->
+          <div class="p-3 rounded-3 bg-body-tertiary border mb-4 text-center">
+            <div class="text-uppercase text-body-secondary fw-semibold small" style="letter-spacing: 0.05em;">
+              Predicted Appliance Consumption
+            </div>
+            <div class="display-4 fw-bold text-primary my-1">
+              <span id="valPredictionWh">--</span> <span class="fs-5 text-body-secondary">Wh</span>
+            </div>
+            <div class="d-inline-flex align-items-center gap-2 mt-2">
+              <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2 fs-6">
+                <i class="bi bi-shield-shaded me-1"></i> 90% Conformal Interval:
+                <strong id="valIntervalRange">[-- Wh, -- Wh]</strong>
+              </span>
+            </div>
+            <div class="text-muted small mt-2">
+              <i class="bi bi-info-circle me-1"></i> Conformal radius: ±<span id="valIntervalRadius">--</span> Wh (finite-sample coverage guarantee).
+            </div>
+          </div>
+
+          <!-- Defaults Notice -->
+          <div id="defaultsContainer" class="alert alert-secondary py-2 px-3 small d-none mb-4">
+            <i class="bi bi-cpu-fill me-1"></i>
+            <strong>Dataset medians applied for unmeasured features:</strong>
+            <span id="defaultsList"></span>
+          </div>
+
+          <!-- Recommendations Section -->
+          <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+            <i class="bi bi-lightbulb-fill text-warning"></i>
+            Wattsmart Energy Coach Recommendations
+          </h6>
+          <div id="recommendationsList" class="d-flex flex-column gap-3">
+            <!-- Dynamically populated from API -->
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("predictForm");
+  const btnSubmit = document.getElementById("btnPredictSubmit");
+  const spinner = document.getElementById("predictSpinner");
+  const icon = document.getElementById("predictIcon");
+  const btnText = document.getElementById("predictBtnText");
+  const placeholder = document.getElementById("resultPlaceholder");
+  const loading = document.getElementById("resultLoading");
+  const resultCard = document.getElementById("resultCard");
+  const btnPreset = document.getElementById("btnFillPreset");
+
+  btnPreset.addEventListener("click", () => {
+    document.getElementById("indoor_temp").value = "21.0";
+    document.getElementById("indoor_humidity").value = "45.0";
+    document.getElementById("outdoor_temp").value = "5.5";
+    document.getElementById("outdoor_humidity").value = "84.0";
+    document.getElementById("windspeed").value = "4.2";
+    document.getElementById("pressure").value = "756.0";
+    document.getElementById("hour").value = "18";
+    document.getElementById("day_of_week").value = "2";
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    // Prepare JSON payload
+    const payload = {
+      indoor_temp: parseFloat(document.getElementById("indoor_temp").value),
+      indoor_humidity: parseFloat(document.getElementById("indoor_humidity").value),
+      outdoor_temp: parseFloat(document.getElementById("outdoor_temp").value),
+      outdoor_humidity: parseFloat(document.getElementById("outdoor_humidity").value),
+      windspeed: parseFloat(document.getElementById("windspeed").value),
+      pressure: parseFloat(document.getElementById("pressure").value),
+      hour: parseInt(document.getElementById("hour").value),
+      day_of_week: parseInt(document.getElementById("day_of_week").value),
+    };
+
+    // UI Loading state
+    btnSubmit.disabled = true;
+    spinner.classList.remove("d-none");
+    icon.classList.add("d-none");
+    btnText.textContent = "Calculating...";
+    placeholder.classList.add("d-none");
+    resultCard.classList.add("d-none");
+    loading.classList.remove("d-none");
+
+    try {
+      const resp = await fetch("/api/predict", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.message || (data.details && data.details[0]?.message) || "Prediction failed");
+      }
+
+      // Display predictions
+      document.getElementById("valPredictionWh").textContent = data.prediction_wh.toFixed(1);
+      const low = data.confidence_interval.lower_wh.toFixed(1);
+      const high = data.confidence_interval.upper_wh.toFixed(1);
+      document.getElementById("valIntervalRange").textContent = `[${low} Wh - ${high} Wh]`;
+      document.getElementById("valIntervalRadius").textContent = data.confidence_interval.radius_wh.toFixed(1);
+
+      // Defaults notice
+      const defContainer = document.getElementById("defaultsContainer");
+      const defList = document.getElementById("defaultsList");
+      if (data.defaults_applied && data.defaults_applied.length > 0) {
+        defList.textContent = data.defaults_applied.slice(0, 8).join(", ") + (data.defaults_applied.length > 8 ? "..." : "");
+        defContainer.classList.remove("d-none");
+      } else {
+        defContainer.classList.add("d-none");
+      }
+
+      // Populate recommendations
+      const recsList = document.getElementById("recommendationsList");
+      recsList.innerHTML = "";
+      if (data.recommendations && data.recommendations.length > 0) {
+        data.recommendations.forEach((rec) => {
+          const card = document.createElement("div");
+          card.className = "card border bg-body-tertiary p-3 rounded-3";
+          card.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <span class="badge bg-primary-subtle text-primary border border-primary-subtle">${escapeHtml(rec.category)}</span>
+              ${rec.estimated_savings_wh > 0 ? `<span class="badge bg-success text-white">Save ~${rec.estimated_savings_wh} Wh</span>` : ""}
+            </div>
+            <h6 class="fw-bold mb-1 mt-1">${escapeHtml(rec.title)}</h6>
+            <p class="small text-body-secondary mb-2">${escapeHtml(rec.description)}</p>
+            <div class="small text-muted" style="font-size: 0.75rem;">
+              <i class="bi bi-exclamation-circle me-1"></i><em>${escapeHtml(rec.caveats)}</em>
+            </div>
+          `;
+          recsList.appendChild(card);
+        });
+      }
+
+      loading.classList.add("d-none");
+      resultCard.classList.remove("d-none");
+    } catch (err) {
+      loading.classList.add("d-none");
+      placeholder.classList.remove("d-none");
+      showAlert(err.message, "danger");
+    } finally {
+      btnSubmit.disabled = false;
+      spinner.classList.add("d-none");
+      icon.classList.remove("d-none");
+      btnText.textContent = "Generate Prediction & Recommendations";
+    }
+  });
+
+  // Automatically trigger one prediction on initial load
+  form.dispatchEvent(new Event("submit"));
+});
+</script>
+{% endblock %}

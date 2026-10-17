@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block title %}Model Telemetry & Benchmarks - Wattsmart 2.0{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-lg-8">
+      <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-check2-circle text-primary"></i> Model Architecture & Benchmark Telemetry
+      </h2>
+      <p class="text-body-secondary mb-0">
+        Empirical evaluation of time-series baselines, tree ensemble candidates, conformal coverage, and SHAP explainability.
+      </p>
+    </div>
+    <div class="col-lg-4 text-lg-end d-flex align-items-center justify-content-lg-end gap-2 mt-3 mt-lg-0">
+      <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+        <i class="bi bi-check-circle-fill me-1"></i> Production Deployed: Tuned XGBoost
+      </span>
+    </div>
+  </div>
+
+  <!-- Key Metrics Header -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+        <div class="text-muted small fw-semibold text-uppercase">Holdout Test MAE</div>
+        <div class="fs-2 fw-bold text-primary mt-1">
+          <span id="metricMae">--</span> <span class="fs-6 text-muted">Wh</span>
+        </div>
+        <div class="small text-success mt-1">
+          <i class="bi bi-arrow-down-right"></i> Beats Mean Baseline (24.16 Wh)
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+        <div class="text-muted small fw-semibold text-uppercase">Holdout Test RMSE</div>
+        <div class="fs-2 fw-bold text-primary mt-1">
+          <span id="metricRmse">--</span> <span class="fs-6 text-muted">Wh</span>
+        </div>
+        <div class="small text-muted mt-1">Quadratic penalization metric</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+        <div class="text-muted small fw-semibold text-uppercase">Coefficient of Determination (R²)</div>
+        <div class="fs-2 fw-bold text-success mt-1">
+          <span id="metricR2">--</span>
+        </div>
+        <div class="small text-success mt-1">
+          <i class="bi bi-check-lg"></i> Resampled 10-min target fit
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+        <div class="text-muted small fw-semibold text-uppercase">90% Conformal Radius</div>
+        <div class="fs-2 fw-bold text-info mt-1">
+          ±<span id="metricConformalRadius">--</span> <span class="fs-6 text-muted">Wh</span>
+        </div>
+        <div class="small text-muted mt-1">Finite-sample residual quantile</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model Comparison Table -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-body border-bottom py-3 d-flex justify-content-between align-items-center">
+      <h5 class="card-title mb-0 fw-semibold">
+        <i class="bi bi-table text-primary me-2"></i> Comprehensive Model Benchmark on Chronological Holdout Set
+      </h5>
+      <span class="badge bg-secondary-subtle text-secondary">
+        Split: 80% Train (1,569 rows) / 20% Test (393 rows)
+      </span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="comparisonTable">
+          <thead class="table-light">
+            <tr>
+              <th scope="col" class="ps-4">Model Candidate</th>
+              <th scope="col">MAE (Wh)</th>
+              <th scope="col">RMSE (Wh)</th>
+              <th scope="col">R²</th>
+              <th scope="col">MAPE (%)</th>
+              <th scope="col">SMAPE (%)</th>
+              <th scope="col" class="pe-4">Status / Role</th>
+            </tr>
+          </thead>
+          <tbody id="comparisonTableBody">
+            <!-- Dynamically populated from /api/model-info -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Explainability & Diagnostics Row -->
+  <div class="row g-4 mb-4">
+    <!-- SHAP Summary Image -->
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-body border-bottom py-3">
+          <h5 class="card-title mb-0 fw-semibold">
+            <i class="bi bi-diagram-3-fill text-primary me-2"></i> SHAP Global Feature Impact Summary
+          </h5>
+        </div>
+        <div class="card-body p-3 text-center">
+          <img src="/models/shap-summary" alt="SHAP Feature Importance Summary" class="img-fluid rounded border shadow-sm" style="max-height: 420px;" onerror="this.src='/docs/figures/shap_summary.png';">
+          <div class="small text-muted mt-2 text-start px-2">
+            <strong>Interpretation:</strong> Each dot corresponds to an observation. Features like recent lag consumption (<code>appliances_lag_1</code>, <code>appliances_roll_mean_6</code>) and room temperature gradient have dominant attributions.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Feature Importance Bar Chart -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-header bg-body border-bottom py-3">
+          <h5 class="card-title mb-0 fw-semibold">
+            <i class="bi bi-bar-chart-fill text-primary me-2"></i> Top 10 Feature Importances
+          </h5>
+        </div>
+        <div class="card-body p-4" style="height: 420px;">
+          <canvas id="featureImportanceChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diagnostic Plots Row -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-body border-bottom py-3">
+          <h6 class="card-title mb-0 fw-semibold">Actual vs. Predicted Consumption</h6>
+        </div>
+        <div class="card-body p-3 text-center">
+          <img src="/docs/figures/actual_vs_predicted.png" alt="Actual vs Predicted" class="img-fluid rounded border" style="max-height: 320px;">
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-body border-bottom py-3">
+          <h6 class="card-title mb-0 fw-semibold">Residuals & Error Distribution</h6>
+        </div>
+        <div class="card-body p-3 text-center">
+          <img src="/docs/figures/residuals.png" alt="Residuals Plot" class="img-fluid rounded border" style="max-height: 320px;">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Limitations & Methodology -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-body border-bottom py-3">
+      <h5 class="card-title mb-0 fw-semibold">
+        <i class="bi bi-info-circle text-primary me-2"></i> Engineering Rigor, Data Limitations & Assumptions
+      </h5>
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-4">
+        <div class="col-md-6">
+          <h6 class="fw-bold text-body">1. Redundant Columns & Noise Removal</h6>
+          <p class="small text-body-secondary mb-3">
+            In the raw data, living room sensor columns <code>T2</code> and <code>RH_2</code> are strictly identical to outdoor weather readings <code>T_out</code> and <code>RH_out</code> throughout the 19,735 rows. Keeping them would cause severe multicollinearity. Furthermore, <code>rv1</code> and <code>rv2</code> were synthetic random uniform variables created during the original UCI benchmark; they were dropped to avoid overfitting to noise.
+          </p>
+
+          <h6 class="fw-bold text-body">2. Resampling Rationale (1-min vs. 10-min)</h6>
+          <p class="small text-body-secondary mb-0">
+            A naive model on raw 1-minute data yields weak predictive signal (R² ~0.44, MAE ~26.4 Wh) due to stochastic 60-second appliance switching transients. Resampling to 10-minute mean aggregation filters high-frequency jitter into physical power trends, boosting R² to 0.67 and reducing MAE to 9.58 Wh without loss of actionable dispatch utility.
+          </p>
+        </div>
+
+        <div class="col-md-6">
+          <h6 class="fw-bold text-body">3. Temporal Scope Limitation</h6>
+          <p class="small text-body-secondary mb-3">
+            The dataset spans exactly 13.7 days (2016-01-11 to 2016-01-24) during winter in Stambruges, Belgium. Consequently, the model cannot extrapolate to summer air conditioning behavior or long-term seasonal oscillations. In production, this requires an incremental retrainer or continuous fine-tuning pipeline.
+          </p>
+
+          <h6 class="fw-bold text-body">4. Absence of Sub-Metered Appliance Channels</h6>
+          <p class="small text-body-secondary mb-0">
+            Whole-home appliance load is captured as a lump sum without per-circuit energy disaggregation (NILM). Recommendations are therefore calculated counterfactually through scenario re-prediction with unit Wh tracking, rather than sub-circuit switching.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  let featureChart = null;
+
+  try {
+    const resp = await fetch("/api/model-info");
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.message || "Failed to load model info");
+
+    // Populate Key Metrics
+    document.getElementById("metricMae").textContent = json.metrics.mae.toFixed(2);
+    document.getElementById("metricRmse").textContent = json.metrics.rmse.toFixed(2);
+    document.getElementById("metricR2").textContent = json.metrics.r2.toFixed(4);
+    document.getElementById("metricConformalRadius").textContent = json.conformal_prediction.residual_radius_wh.toFixed(2);
+
+    // Populate Comparison Table
+    const tbody = document.getElementById("comparisonTableBody");
+    tbody.innerHTML = "";
+    const comparison = json.model_comparison;
+
+    for (const [name, m] of Object.entries(comparison)) {
+      const tr = document.createElement("tr");
+      let isProduction = name.includes("Tuned_XGBoost") || name.includes("Final");
+      if (isProduction) tr.className = "table-success fw-semibold";
+
+      let statusBadge = `<span class="badge bg-secondary-subtle text-secondary">Candidate</span>`;
+      if (name.includes("Baseline")) {
+        statusBadge = `<span class="badge bg-warning-subtle text-warning-emphasis">Baseline Reference</span>`;
+      } else if (isProduction) {
+        statusBadge = `<span class="badge bg-success">Production Champion</span>`;
+      }
+
+      tr.innerHTML = `
+        <td class="ps-4 fw-bold">${escapeHtml(name)}</td>
+        <td>${m.mae.toFixed(2)}</td>
+        <td>${m.rmse.toFixed(2)}</td>
+        <td><span class="${m.r2 > 0.6 ? 'text-success fw-bold' : (m.r2 < 0 ? 'text-danger' : '')}">${m.r2.toFixed(4)}</span></td>
+        <td>${m.mape.toFixed(2)}%</td>
+        <td>${m.smape.toFixed(2)}%</td>
+        <td class="pe-4">${statusBadge}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    // Populate Feature Importance Chart
+    const topFeatures = json.top_features.slice(0, 10);
+    const featureLabels = topFeatures.map(f => f.feature);
+    const featureVals = topFeatures.map(f => f.importance);
+
+    const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+    const gridColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.06)";
+    const textColor = isDark ? "#dee2e6" : "#495057";
+
+    const ctx = document.getElementById("featureImportanceChart").getContext("2d");
+    featureChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: featureLabels,
+        datasets: [{
+          label: "Importance Score",
+          data: featureVals,
+          backgroundColor: "#0d6efd",
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: textColor } },
+          y: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } }
+        }
+      }
+    });
+
+  } catch (err) {
+    showAlert(err.message, "danger");
+  }
+});
+</script>
+{% endblock %}

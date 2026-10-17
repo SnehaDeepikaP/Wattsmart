@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Error {{ code }} - Wattsmart 2.0{% endblock %}
+
+{% block content %}
+<div class="container py-5 text-center">
+  <div class="py-5">
+    <div class="display-1 text-danger fw-bold">{{ code }}</div>
+    <h3 class="fw-semibold mt-2">{{ message }}</h3>
+    <p class="text-muted mx-auto" style="max-width: 450px;">
+      The application encountered an unexpected condition or could not locate the requested resource.
+    </p>
+    <a href="/" class="btn btn-primary rounded-pill px-4 mt-3">
+      <i class="bi bi-house-door-fill me-1"></i> Return to Predictor
+    </a>
+  </div>
+</div>
+{% endblock %}
