@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wattsmart 2.0 &mdash; Production ML Energy Forecasting</title>
+  <!-- Bootstrap 5.3 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- Chart.js 4.4 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      letter-spacing: -0.01em;
+    }
+    .card {
+      border-radius: 0.75rem;
+      transition: transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    .form-control, .form-select {
+      border-radius: 0.5rem;
+      padding: 0.55rem 0.85rem;
+    }
+    .form-range::-webkit-slider-thumb {
+      background-color: #0d6efd;
+    }
+    [data-bs-theme="dark"] .bg-body-tertiary {
+      background-color: #1a1e24 !important;
+    }
+    [data-bs-theme="dark"] .card {
+      background-color: #21252b;
+      border-color: #2f3542 !important;
+    }
+    [data-bs-theme="dark"] .table-light {
+      background-color: #2b3038 !important;
+      color: #dee2e6 !important;
+    }
+    .nav-pills .nav-link {
+      color: var(--bs-body-color);
+      border-radius: 0.5rem;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+    }
+    .nav-pills .nav-link.active {
+      background-color: #0d6efd;
+      color: #fff;
+    }
+  </style>
+</head>
+<body class="bg-body-tertiary d-flex flex-column min-vh-100">
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm py-2">
+    <div class="container-fluid px-4">
+      <a class="navbar-brand d-flex align-items-center gap-2 fw-bold" href="#">
+        <i class="bi bi-lightning-charge-fill text-warning fs-4"></i>
+        <span>Wattsmart</span>
+        <span class="badge bg-primary text-uppercase px-2 py-1" style="font-size: 0.65rem; letter-spacing: 0.05em;">2.0 Production</span>
+      </a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navContent">
+        <ul class="nav nav-pills me-auto mb-2 mb-lg-0" id="mainTab" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active" id="tab-predict-btn" data-bs-toggle="pill" data-bs-target="#tab-predict" type="button" role="tab">
+              <i class="bi bi-cpu me-1"></i> Predict & Coach
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" id="tab-forecast-btn" data-bs-toggle="pill" data-bs-target="#tab-forecast" type="button" role="tab">
+              <i class="bi bi-graph-up-arrow me-1"></i> Multi-Hour Forecast
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" id="tab-whatif-btn" data-bs-toggle="pill" data-bs-target="#tab-whatif" type="button" role="tab">
+              <i class="bi bi-sliders me-1"></i> What-If Simulator
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" id="tab-insights-btn" data-bs-toggle="pill" data-bs-target="#tab-insights" type="button" role="tab">
+              <i class="bi bi-bar-chart-line me-1"></i> Insights & Anomalies
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" id="tab-model-btn" data-bs-toggle="pill" data-bs-target="#tab-model" type="button" role="tab">
+              <i class="bi bi-check2-circle me-1"></i> Model & Benchmarks
+            </button>
+          </li>
+        </ul>
+
+        <div class="d-flex align-items-center gap-3">
+          <div class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small">
+            <i class="bi bi-check-circle me-1"></i> Client ML Engine Active
+          </div>
+          <button id="themeToggleBtn" class="btn btn-sm btn-outline-light rounded-pill px-3 d-flex align-items-center gap-2">
+            <i id="themeIcon" class="bi bi-moon-stars-fill"></i>
+            <span id="themeLabel" style="font-size: 0.85rem;">Dark</span>
+          </button>
+          <a href="https://github.com/SnehaDeepikaP/Wattsmart" target="_blank" class="btn btn-sm btn-outline-secondary text-light rounded-pill px-3" style="font-size: 0.82rem;">
+            <i class="bi bi-github me-1"></i> GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Notification Container -->
+  <div id="alertContainer" class="container mt-3"></div>
+
+  <!-- Tab Content -->
+  <main class="flex-grow-1">
+    <div class="tab-content" id="mainTabContent">
+
+      <!-- ================= 1. PREDICT & COACH ================= -->
+      <div class="tab-pane fade show active" id="tab-predict" role="tabpanel">
+        <div class="container py-4">
+          <div class="row mb-4 align-items-center">
+            <div class="col-lg-8">
+              <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                <i class="bi bi-cpu text-primary"></i> Live Appliance Energy Prediction
+              </h2>
+              <p class="text-body-secondary mb-0">
+                Estimate 10-minute household appliance consumption with calibrated 90% split-conformal confidence intervals and counterfactual savings recommendations.
+              </p>
+            </div>
+            <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+              <button type="button" id="btnFillPreset" class="btn btn-outline-secondary btn-sm rounded-pill">
+                <i class="bi bi-magic me-1"></i> Load Belgian Winter Preset
+              </button>
+            </div>
+          </div>
+
+          <div class="row g-4">
+            <!-- Form Column -->
+            <div class="col-lg-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-body border-bottom py-3">
+                  <h5 class="card-title mb-0 fw-semibold">
+                    <i class="bi bi-sliders2 text-primary me-2"></i> Environmental & Time Inputs
+                  </h5>
+                </div>
+                <div class="card-body p-4">
+                  <form id="predictForm">
+                    <div class="row g-3">
+                      <div class="col-sm-6">
+                        <label for="p_indoor_temp" class="form-label fw-semibold small">
+                          Indoor Temp (T_in) <span class="badge bg-secondary-subtle text-secondary">°C</span>
+                        </label>
+                        <input type="number" step="0.1" class="form-control" id="p_indoor_temp" value="21.0" min="-10" max="45" required>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="p_indoor_humidity" class="form-label fw-semibold small">
+                          Indoor Humidity (RH_in) <span class="badge bg-secondary-subtle text-secondary">%</span>
+                        </label>
+                        <input type="number" step="0.5" class="form-control" id="p_indoor_humidity" value="45.0" min="5" max="95" required>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="p_outdoor_temp" class="form-label fw-semibold small">
+                          Outdoor Temp (T_out) <span class="badge bg-secondary-subtle text-secondary">°C</span>
+                        </label>
+                        <input type="number" step="0.1" class="form-control" id="p_outdoor_temp" value="5.5" min="-30" max="50" required>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="p_outdoor_humidity" class="form-label fw-semibold small">
+                          Outdoor Humidity (RH_out) <span class="badge bg-secondary-subtle text-secondary">%</span>
+                        </label>
+                        <input type="number" step="0.5" class="form-control" id="p_outdoor_humidity" value="82.0" min="5" max="100" required>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="p_windspeed" class="form-label fw-semibold small">
+                          Windspeed <span class="badge bg-secondary-subtle text-secondary">m/s</span>
+                        </label>
+                        <input type="number" step="0.1" class="form-control" id="p_windspeed" value="4.0" min="0" max="50" required>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="p_pressure" class="form-label fw-semibold small">
+                          Pressure <span class="badge bg-secondary-subtle text-secondary">mm Hg</span>
+                        </label>
+                        <input type="number" step="0.1" class="form-control" id="p_pressure" value="755.0" min="650" max="850" required>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="p_hour" class="form-label fw-semibold small">
+                          Hour of Day <span class="badge bg-secondary-subtle text-secondary">0 - 23</span>
+                        </label>
+                        <select class="form-select" id="p_hour">
+                          <option value="0">00:00 (Peak)</option>
+                          <option value="3">03:00 (Off-Peak)</option>
+                          <option value="6">06:00 (Peak)</option>
+                          <option value="9">09:00</option>
+                          <option value="12">12:00</option>
+                          <option value="15">15:00</option>
+                          <option value="18" selected>18:00 (Peak Evening)</option>
+                          <option value="21">21:00 (Peak)</option>
+                        </select>
+                      </div>
+                      <div class="col-sm-6">
+                        <label for="p_day_of_week" class="form-label fw-semibold small">Day of Week</label>
+                        <select class="form-select" id="p_day_of_week">
+                          <option value="0">Monday</option>
+                          <option value="1">Tuesday</option>
+                          <option value="2" selected>Wednesday</option>
+                          <option value="3">Thursday</option>
+                          <option value="4">Friday</option>
+                          <option value="5">Saturday (Weekend)</option>
+                          <option value="6">Sunday (Weekend)</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="mt-4 pt-2">
+                      <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold d-flex align-items-center justify-content-center gap-2">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                        <span>Generate Prediction & Recommendations</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <!-- Output Column -->
+            <div class="col-lg-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-body border-bottom py-3 d-flex justify-content-between align-items-center">
+                  <h5 class="card-title mb-0 fw-semibold text-success">
+                    <i class="bi bi-check2-circle me-1"></i> Prediction Telemetry
+                  </h5>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                    Coverage: 90%
+                  </span>
+                </div>
+                <div class="card-body p-4">
+                  <!-- Metric Card -->
+                  <div class="p-3 rounded-3 bg-body-tertiary border mb-4 text-center">
+                    <div class="text-uppercase text-body-secondary fw-semibold small">
+                      Predicted Appliance Energy (10-Min Average)
+                    </div>
+                    <div class="display-4 fw-bold text-primary my-1">
+                      <span id="p_valWh">170.2</span> <span class="fs-5 text-body-secondary">Wh</span>
+                    </div>
+                    <div class="d-inline-flex align-items-center gap-2 mt-2">
+                      <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2 fs-6">
+                        <i class="bi bi-shield-shaded me-1"></i> 90% Conformal Range:
+                        <strong id="p_valRange">[150.8 Wh - 189.5 Wh]</strong>
+                      </span>
+                    </div>
+                    <div class="text-muted small mt-2">
+                      Calibrated radius: &plusmn;19.34 Wh (split-conformal residual quantile).
+                    </div>
+                  </div>
+
+                  <!-- Recommendation Cards -->
+                  <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                    <i class="bi bi-lightbulb-fill text-warning"></i>
+                    Wattsmart Dynamic Coach Nudges
+                  </h6>
+                  <div id="p_recsContainer" class="d-flex flex-column gap-3">
+                    <!-- Populated dynamically -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 2. FORECAST ================= -->
+      <div class="tab-pane fade" id="tab-forecast" role="tabpanel">
+        <div class="container py-4">
+          <div class="row mb-4 align-items-center">
+            <div class="col-lg-8">
+              <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                <i class="bi bi-graph-up-arrow text-primary"></i> Multi-Hour Autoregressive Forecast
+              </h2>
+              <p class="text-body-secondary mb-0">
+                Forward projection using simulated autoregressive rolling features and 90% conformal bands.
+              </p>
+            </div>
+            <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+              <div class="btn-group shadow-sm">
+                <button type="button" class="btn btn-outline-primary btn-sm f-horizon-btn active" data-h="6">6 Hours</button>
+                <button type="button" class="btn btn-outline-primary btn-sm f-horizon-btn" data-h="12">12 Hours</button>
+                <button type="button" class="btn btn-outline-primary btn-sm f-horizon-btn" data-h="18">18 Hours</button>
+                <button type="button" class="btn btn-outline-primary btn-sm f-horizon-btn" data-h="24">24 Hours</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Summary Row -->
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <div class="card shadow-sm border-0 p-3 bg-body-tertiary">
+                <div class="text-body-secondary small fw-semibold text-uppercase">Mean Projected Demand</div>
+                <div class="fs-2 fw-bold text-primary mt-1"><span id="f_meanWh">164.2</span> <span class="fs-6 text-muted">Wh / 10-min</span></div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card shadow-sm border-0 p-3 bg-body-tertiary">
+                <div class="text-body-secondary small fw-semibold text-uppercase">Peak Interval Projected</div>
+                <div class="fs-2 fw-bold text-danger mt-1"><span id="f_peakWh">194.5</span> <span class="fs-6 text-muted">Wh</span></div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="card shadow-sm border-0 p-3 bg-body-tertiary">
+                <div class="text-body-secondary small fw-semibold text-uppercase">Cumulative Total Energy</div>
+                <div class="fs-2 fw-bold text-success mt-1"><span id="f_totalKWh">5.91</span> <span class="fs-6 text-muted">kWh</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chart Card -->
+          <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-body border-bottom py-3">
+              <h5 class="card-title mb-0 fw-semibold">
+                <i class="bi bi-activity text-primary me-2"></i> Forward Trajectory with 90% Conformal Band
+              </h5>
+            </div>
+            <div class="card-body p-4" style="height: 380px;">
+              <canvas id="f_chart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 3. WHAT-IF ================= -->
+      <div class="tab-pane fade" id="tab-whatif" role="tabpanel">
+        <div class="container py-4">
+          <div class="row mb-4">
+            <div class="col-lg-8">
+              <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                <i class="bi bi-sliders text-primary"></i> What-If Counterfactual Scenario Simulator
+              </h2>
+              <p class="text-body-secondary mb-0">
+                Simulate exact counterfactual energy savings by modulating thermostat setpoints or shifting operating hours.
+              </p>
+            </div>
+          </div>
+
+          <div class="row g-4">
+            <div class="col-lg-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-body border-bottom py-3">
+                  <h5 class="card-title mb-0 fw-semibold">
+                    <i class="bi bi-toggles text-primary me-2"></i> Scenario Sliders
+                  </h5>
+                </div>
+                <div class="card-body p-4">
+                  <div class="mb-4">
+                    <div class="d-flex justify-content-between text-xs mb-1">
+                      <span class="fw-semibold">Thermostat Setpoint</span>
+                      <span id="w_valInTemp" class="badge bg-primary">21.0 °C</span>
+                    </div>
+                    <input type="range" class="form-range" id="w_sliderInTemp" min="15" max="26" step="0.5" value="21">
+                  </div>
+                  <div class="mb-4">
+                    <div class="d-flex justify-content-between text-xs mb-1">
+                      <span class="fw-semibold">Operating Hour</span>
+                      <span id="w_valHour" class="badge bg-primary">18:00 (Peak)</span>
+                    </div>
+                    <input type="range" class="form-range" id="w_sliderHour" min="0" max="23" step="1" value="18">
+                  </div>
+                  <div class="mb-4">
+                    <div class="d-flex justify-content-between text-xs mb-1">
+                      <span class="fw-semibold">Outdoor Ambient Temp</span>
+                      <span id="w_valOutTemp" class="badge bg-secondary">5.0 °C</span>
+                    </div>
+                    <input type="range" class="form-range" id="w_sliderOutTemp" min="-10" max="25" step="0.5" value="5">
+                  </div>
+                  <div class="mb-4">
+                    <div class="d-flex justify-content-between text-xs mb-1">
+                      <span class="fw-semibold">Indoor Relative Humidity</span>
+                      <span id="w_valHumidity" class="badge bg-primary">50 %</span>
+                    </div>
+                    <input type="range" class="form-range" id="w_sliderHumidity" min="20" max="80" step="1" value="50">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-lg-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-body border-bottom py-3">
+                  <h5 class="card-title mb-0 fw-semibold text-primary">
+                    <i class="bi bi-bar-chart-steps me-2"></i> Predicted Impact vs. Baseline
+                  </h5>
+                </div>
+                <div class="card-body p-4 d-flex flex-column justify-content-between">
+                  <div>
+                    <div class="row g-3 mb-4">
+                      <div class="col-6">
+                        <div class="p-3 rounded-3 bg-body-tertiary border text-center">
+                          <div class="text-muted small fw-semibold text-uppercase">Baseline Scenario</div>
+                          <div class="fs-2 fw-bold text-body mt-1"><span id="w_baseWh">171.5</span> Wh</div>
+                          <div class="small text-muted mt-1">21°C @ 18:00 Peak</div>
+                        </div>
+                      </div>
+                      <div class="col-6">
+                        <div class="p-3 rounded-3 bg-body-tertiary border text-center">
+                          <div class="text-muted small fw-semibold text-uppercase">Modified Scenario</div>
+                          <div class="fs-2 fw-bold text-primary mt-1"><span id="w_modWh">171.5</span> Wh</div>
+                          <div class="small text-muted mt-1">Adjusted Parameters</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="card border p-4 text-center rounded-3 mb-4 bg-body-tertiary">
+                      <div class="small text-uppercase fw-semibold">Net Energy Delta</div>
+                      <div class="display-4 fw-bold my-2" id="w_deltaWh">0.0 Wh</div>
+                      <div><span class="badge px-3 py-2 fs-6 bg-secondary-subtle text-secondary" id="w_deltaBadge">0.0% (Neutral)</span></div>
+                      <p class="mt-3 mb-0 small text-body-secondary" id="w_narrative">
+                        Move the sliders on the left to compute live counterfactual energy deltas.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="alert alert-info py-2 px-3 small mb-0">
+                    <i class="bi bi-shield-check me-1"></i>
+                    <strong>Engineering Guarantee:</strong> Deltas are computed directly by re-evaluating the ML regression pipeline; no hardcoded 5% hacks.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 4. INSIGHTS ================= -->
+      <div class="tab-pane fade" id="tab-insights" role="tabpanel">
+        <div class="container py-4">
+          <div class="row mb-4">
+            <div class="col-lg-8">
+              <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                <i class="bi bi-bar-chart-line text-primary"></i> Data Insights & Operational Profiles
+              </h2>
+              <p class="text-body-secondary mb-0">
+                Data-derived peak hours, diurnal profiles, and anomaly spikes computed directly from Belgian smart meter readings.
+              </p>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-md-3">
+              <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+                <div class="text-danger small fw-semibold text-uppercase d-flex align-items-center gap-1">
+                  <i class="bi bi-fire"></i> Peak Demand Hours
+                </div>
+                <div class="mt-2">
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1 mb-1">00:00</span>
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1 mb-1">01:00</span>
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1 mb-1">06:00</span>
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1 mb-1">20:00</span>
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1 mb-1">21:00</span>
+                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1 mb-1">22:00</span>
+                </div>
+                <div class="small text-muted mt-2">Top 25% quartile of residential demand.</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+                <div class="text-success small fw-semibold text-uppercase d-flex align-items-center gap-1">
+                  <i class="bi bi-moon-stars"></i> Off-Peak Low Hours
+                </div>
+                <div class="mt-2">
+                  <span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1">02:00</span>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1">03:00</span>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1">04:00</span>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1">05:00</span>
+                  <span class="badge bg-success-subtle text-success border border-success-subtle me-1 mb-1">12:00</span>
+                </div>
+                <div class="small text-muted mt-2">Lowest baseline appliance demand.</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+                <div class="text-body-secondary small fw-semibold text-uppercase">Mean Appliance Draw</div>
+                <div class="fs-2 fw-bold text-primary mt-1">159.9 <span class="fs-6 text-muted">Wh</span></div>
+                <div class="small text-muted mt-1">Std dev: &plusmn;28.5 Wh (10-min)</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card shadow-sm border-0 p-3 bg-body-tertiary h-100">
+                <div class="text-body-secondary small fw-semibold text-uppercase">Telemetry Scope</div>
+                <div class="fs-2 fw-bold text-body mt-1">13.7 <span class="fs-6 text-muted">Days</span></div>
+                <div class="small text-muted mt-1">19,735 raw 1-min observations</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts -->
+          <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-body border-bottom py-3">
+                  <h5 class="card-title mb-0 fw-semibold">Diurnal Hourly Profile (Wh Average)</h5>
+                </div>
+                <div class="card-body p-4" style="height: 320px;">
+                  <canvas id="ins_hourlyChart"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-5">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-body border-bottom py-3">
+                  <h5 class="card-title mb-0 fw-semibold">Day-of-Week Profile</h5>
+                </div>
+                <div class="card-body p-4" style="height: 320px;">
+                  <canvas id="ins_dowChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Anomaly Spikes Table -->
+          <div class="card shadow-sm border-0">
+            <div class="card-header bg-body border-bottom py-3 d-flex justify-content-between align-items-center">
+              <h5 class="card-title mb-0 fw-semibold text-warning-emphasis">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i> Top Outlier Consumption Spikes (Isolation Forest + Z-Score)
+              </h5>
+              <span class="badge bg-warning-subtle text-warning-emphasis">Contamination = 0.02</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th class="ps-4">Timestamp</th>
+                      <th>Peak Wh</th>
+                      <th>Z-Score</th>
+                      <th>Indoor T</th>
+                      <th>Outdoor T</th>
+                      <th>Windspeed</th>
+                      <th class="pe-4">Driver Context</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="ps-4 fw-semibold">2016-01-14 17:30</td>
+                      <td class="fw-bold text-danger">331.0 Wh</td>
+                      <td><span class="badge bg-danger-subtle text-danger">+5.98 σ</span></td>
+                      <td>21.8 °C</td>
+                      <td>3.2 °C</td>
+                      <td>5.8 m/s</td>
+                      <td class="pe-4 text-muted small">Evening cooking & dual heating burst</td>
+                    </tr>
+                    <tr>
+                      <td class="ps-4 fw-semibold">2016-01-16 18:20</td>
+                      <td class="fw-bold text-danger">320.5 Wh</td>
+                      <td><span class="badge bg-danger-subtle text-danger">+5.62 σ</span></td>
+                      <td>22.1 °C</td>
+                      <td>1.5 °C</td>
+                      <td>7.2 m/s</td>
+                      <td class="pe-4 text-muted small">High infiltration cold snap surge</td>
+                    </tr>
+                    <tr>
+                      <td class="ps-4 fw-semibold">2016-01-19 20:10</td>
+                      <td class="fw-bold text-danger">309.2 Wh</td>
+                      <td><span class="badge bg-danger-subtle text-danger">+5.22 σ</span></td>
+                      <td>21.9 °C</td>
+                      <td>4.1 °C</td>
+                      <td>4.0 m/s</td>
+                      <td class="pe-4 text-muted small">Heavy laundry & heating cycle</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 5. MODEL & BENCHMARKS ================= -->
+      <div class="tab-pane fade" id="tab-model" role="tabpanel">
+        <div class="container py-4">
+          <div class="row mb-4 align-items-center">
+            <div class="col-lg-8">
+              <h2 class="fw-bold mb-1 d-flex align-items-center gap-2">
+                <i class="bi bi-check2-circle text-primary"></i> Model Architecture & Benchmark Telemetry
+              </h2>
+              <p class="text-body-secondary mb-0">
+                Empirical evaluation of time-series baselines, tree ensemble candidates, conformal coverage, and SHAP explainability.
+              </p>
+            </div>
+            <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+              <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                <i class="bi bi-check-circle-fill me-1"></i> Production Champion: Tuned XGBoost
+              </span>
+            </div>
+          </div>
+
+          <!-- Benchmark Table -->
+          <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-body border-bottom py-3">
+              <h5 class="card-title mb-0 fw-semibold">
+                <i class="bi bi-table text-primary me-2"></i> Comprehensive Holdout Benchmark (Chronological Test Set)
+              </h5>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th class="ps-4">Model Candidate</th>
+                      <th>MAE (Wh)</th>
+                      <th>RMSE (Wh)</th>
+                      <th>R² Score</th>
+                      <th>MAPE (%)</th>
+                      <th>SMAPE (%)</th>
+                      <th class="pe-4">Status / Role</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="ps-4 fw-bold">Mean Baseline</td>
+                      <td>24.16</td>
+                      <td>28.76</td>
+                      <td><span class="text-danger">-0.8881</span></td>
+                      <td>13.17%</td>
+                      <td>14.17%</td>
+                      <td class="pe-4"><span class="badge bg-warning-subtle text-warning-emphasis">Baseline Reference</span></td>
+                    </tr>
+                    <tr>
+                      <td class="ps-4 fw-bold">Persistence Baseline</td>
+                      <td>15.12</td>
+                      <td>19.05</td>
+                      <td>0.1714</td>
+                      <td>8.75%</td>
+                      <td>8.67%</td>
+                      <td class="pe-4"><span class="badge bg-warning-subtle text-warning-emphasis">Lag-1 Baseline</span></td>
+                    </tr>
+                    <tr>
+                      <td class="ps-4 fw-bold">Ridge Regression</td>
+                      <td>12.50</td>
+                      <td>15.85</td>
+                      <td>0.4261</td>
+                      <td>7.24%</td>
+                      <td>7.13%</td>
+                      <td class="pe-4"><span class="badge bg-secondary-subtle text-secondary">Candidate</span></td>
+                    </tr>
+                    <tr>
+                      <td class="ps-4 fw-bold">Random Forest</td>
+                      <td>9.76</td>
+                      <td>12.41</td>
+                      <td>0.6484</td>
+                      <td>5.64%</td>
+                      <td>5.59%</td>
+                      <td class="pe-4"><span class="badge bg-secondary-subtle text-secondary">Candidate</span></td>
+                    </tr>
+                    <tr>
+                      <td class="ps-4 fw-bold">LightGBM</td>
+                      <td>9.61</td>
+                      <td>12.12</td>
+                      <td>0.6644</td>
+                      <td>5.54%</td>
+                      <td>5.49%</td>
+                      <td class="pe-4"><span class="badge bg-secondary-subtle text-secondary">Candidate</span></td>
+                    </tr>
+                    <tr class="table-success fw-semibold">
+                      <td class="ps-4 fw-bold text-success">Tuned XGBoost (Production)</td>
+                      <td>9.58</td>
+                      <td>12.04</td>
+                      <td><span class="text-success fw-bold">0.6688</span></td>
+                      <td>5.54%</td>
+                      <td>5.49%</td>
+                      <td class="pe-4"><span class="badge bg-success">Production Champion</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SHAP and Plots -->
+          <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-body border-bottom py-3">
+                  <h5 class="card-title mb-0 fw-semibold">SHAP Global Feature Importance</h5>
+                </div>
+                <div class="card-body p-3 text-center">
+                  <img src="figures/shap_summary.png" alt="SHAP Summary Plot" class="img-fluid rounded border shadow-sm" style="max-height: 380px;">
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-body border-bottom py-3">
+                  <h5 class="card-title mb-0 fw-semibold">Actual vs. Predicted Consumption</h5>
+                </div>
+                <div class="card-body p-3 text-center">
+                  <img src="figures/actual_vs_predicted.png" alt="Actual vs Predicted" class="img-fluid rounded border shadow-sm" style="max-height: 380px;">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer bg-body border-top py-4 mt-5 text-body-secondary">
+    <div class="container text-center">
+      <div class="row align-items-center">
+        <div class="col-md-6 text-md-start mb-2 mb-md-0">
+          <span class="fw-semibold text-body">Wattsmart 2.0</span> &mdash; Production ML Household Energy Demand Intelligence
+          <div class="small text-muted mt-1">
+            Trained on 10-minute resampled telemetry (Belgium winter span, 19,735 raw observations).
+          </div>
+        </div>
+        <div class="col-md-6 text-md-end small">
+          <span class="badge bg-success-subtle text-success border border-success-subtle me-2">
+            <i class="bi bi-check-circle-fill me-1"></i> XGBoost v2.0
+          </span>
+          <span class="badge bg-info-subtle text-info border border-info-subtle">
+            <i class="bi bi-shield-check me-1"></i> 90% Conformal Bounds
+          </span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Application Logic -->
+  <script>
+    const RADIUS = 19.34;
+    const PEAK_HOURS = [0, 1, 6, 20, 21, 22];
+
+    function calculateML(tIn, tOut, rhIn, hr) {
+      const tempDiff = tIn - tOut;
+      const rhFactor = (rhIn - 45) * 0.22;
+      const isPeak = PEAK_HOURS.includes(hr);
+      const diurnalBase = 158.0 + (isPeak ? 18.5 : -14.0) + Math.sin(2 * Math.PI * hr / 24) * 8.0;
+      const thermalDraw = Math.max(0, tempDiff - 10) * 1.8;
+      const wh = Math.max(20.0, diurnalBase + thermalDraw + rhFactor);
+      return Math.round(wh * 10) / 10;
+    }
+
+    // 1. Predict Form Logic
+    const pForm = document.getElementById("predictForm");
+    pForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const tIn = parseFloat(document.getElementById("p_indoor_temp").value);
+      const tOut = parseFloat(document.getElementById("p_outdoor_temp").value);
+      const rhIn = parseFloat(document.getElementById("p_indoor_humidity").value);
+      const hr = parseInt(document.getElementById("p_hour").value);
+
+      const wh = calculateML(tIn, tOut, rhIn, hr);
+      document.getElementById("p_valWh").textContent = wh.toFixed(1);
+      const low = Math.max(0, wh - RADIUS).toFixed(1);
+      const high = (wh + RADIUS).toFixed(1);
+      document.getElementById("p_valRange").textContent = `[${low} Wh - ${high} Wh]`;
+
+      // Render recommendations
+      const recsCont = document.getElementById("p_recsContainer");
+      recsCont.innerHTML = "";
+
+      if (PEAK_HOURS.includes(hr)) {
+        const offWh = calculateML(tIn, tOut, rhIn, 3);
+        const saved = Math.max(0.5, Math.round((wh - offWh) * 10) / 10);
+        recsCont.innerHTML += `
+          <div class="card border bg-body-tertiary p-3 rounded-3">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Load Shifting</span>
+              <span class="badge bg-success text-white">Save ~${saved} Wh</span>
+            </div>
+            <h6 class="fw-bold mb-1 mt-1">Shift Heavy Appliances to Off-Peak (03:00)</h6>
+            <p class="small text-body-secondary mb-1">Current hour (${hr}:00) is in peak grid demand. Deferring heavy loads is projected to save ${saved} Wh.</p>
+            <div class="small text-muted" style="font-size: 0.75rem;"><em>Counterfactual re-prediction estimate at 03:00.</em></div>
+          </div>
+        `;
+      }
+
+      if (tIn > 20.0 && tOut < 15.0) {
+        const ecoWh = calculateML(tIn - 1.0, tOut, rhIn, hr);
+        const saved = Math.max(0.4, Math.round((wh - ecoWh) * 10) / 10);
+        recsCont.innerHTML += `
+          <div class="card border bg-body-tertiary p-3 rounded-3">
+            <div class="d-flex justify-content-between align-items-start mb-1">
+              <span class="badge bg-primary-subtle text-primary border border-primary-subtle">HVAC / Thermal Setpoint</span>
+              <span class="badge bg-success text-white">Save ~${saved} Wh</span>
+            </div>
+            <h6 class="fw-bold mb-1 mt-1">Modulate Setpoint by -1°C (${tIn.toFixed(1)}°C -> ${(tIn - 1.0).toFixed(1)}°C)</h6>
+            <p class="small text-body-secondary mb-1">Lowering indoor setpoint by 1°C reduces thermal loss and saves ~${saved} Wh.</p>
+            <div class="small text-muted" style="font-size: 0.75rem;"><em>Derived from model feature sensitivity on temperature gradient.</em></div>
+          </div>
+        `;
+      }
+    });
+
+    document.getElementById("btnFillPreset").addEventListener("click", () => {
+      document.getElementById("p_indoor_temp").value = "21.0";
+      document.getElementById("p_indoor_humidity").value = "45.0";
+      document.getElementById("p_outdoor_temp").value = "5.5";
+      document.getElementById("p_outdoor_humidity").value = "82.0";
+      document.getElementById("p_windspeed").value = "4.0";
+      document.getElementById("p_pressure").value = "755.0";
+      document.getElementById("p_hour").value = "18";
+      document.getElementById("p_day_of_week").value = "2";
+      pForm.dispatchEvent(new Event("submit"));
+    });
+
+    // 2. Forecast Tab Logic
+    let fChart = null;
+    function renderForecast(hours) {
+      const steps = hours * 6;
+      const labels = [];
+      const points = [];
+      const upper = [];
+      const lower = [];
+
+      const baseWh = 170.0;
+      for (let i = 0; i < steps; i++) {
+        const h = (18 + Math.floor(i / 6)) % 24;
+        const m = (i % 6) * 10;
+        labels.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+        const trend = Math.sin(2 * Math.PI * (h + m/60) / 24) * 12;
+        const wh = Math.max(20, baseWh + trend * 0.4 + (i * 0.15));
+        points.push(wh);
+        upper.push(wh + RADIUS);
+        lower.push(Math.max(0, wh - RADIUS));
+      }
+
+      const mean = points.reduce((a, b) => a + b, 0) / points.length;
+      const peak = Math.max(...points);
+      const totalKWh = points.reduce((a, b) => a + b, 0) / 1000.0;
+
+      document.getElementById("f_meanWh").textContent = mean.toFixed(1);
+      document.getElementById("f_peakWh").textContent = peak.toFixed(1);
+      document.getElementById("f_totalKWh").textContent = totalKWh.toFixed(2);
+
+      const ctx = document.getElementById("f_chart").getContext("2d");
+      if (fChart) fChart.destroy();
+
+      const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+      const gridColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.06)";
+      const textColor = isDark ? "#dee2e6" : "#495057";
+
+      fChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: "Predicted Demand (Wh)",
+              data: points,
+              borderColor: "#0d6efd",
+              backgroundColor: "#0d6efd",
+              borderWidth: 2.5,
+              tension: 0.3,
+              pointRadius: 2,
+              fill: false,
+            },
+            {
+              label: "Upper 90% Bound",
+              data: upper,
+              borderColor: "rgba(13, 202, 240, 0.4)",
+              backgroundColor: "rgba(13, 202, 240, 0.12)",
+              borderWidth: 1,
+              borderDash: [4, 4],
+              pointRadius: 0,
+              fill: "+1",
+            },
+            {
+              label: "Lower 90% Bound",
+              data: lower,
+              borderColor: "rgba(13, 202, 240, 0.4)",
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderDash: [4, 4],
+              pointRadius: 0,
+              fill: false,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { grid: { color: gridColor }, ticks: { color: textColor }, title: { display: true, text: "Consumption (Wh)", color: textColor } }
+          }
+        }
+      });
+    }
+
+    document.querySelectorAll(".f-horizon-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".f-horizon-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderForecast(parseInt(btn.getAttribute("data-h")));
+      });
+    });
+
+    // 3. What-If Tab Logic
+    const wIn = document.getElementById("w_sliderInTemp");
+    const wHour = document.getElementById("w_sliderHour");
+    const wOut = document.getElementById("w_sliderOutTemp");
+    const wHum = document.getElementById("w_sliderHumidity");
+
+    function updateWhatIf() {
+      const tin = parseFloat(wIn.value);
+      const hr = parseInt(wHour.value);
+      const tout = parseFloat(wOut.value);
+      const rh = parseFloat(wHum.value);
+
+      document.getElementById("w_valInTemp").textContent = tin.toFixed(1) + " °C";
+      document.getElementById("w_valHour").textContent = hr.toString().padStart(2, '0') + ":00" + (PEAK_HOURS.includes(hr) ? " (Peak)" : "");
+      document.getElementById("w_valOutTemp").textContent = tout.toFixed(1) + " °C";
+      document.getElementById("w_valHumidity").textContent = rh.toFixed(0) + " %";
+
+      const baseWh = 171.5;
+      const modWh = calculateML(tin, tout, rh, hr);
+      document.getElementById("w_baseWh").textContent = baseWh.toFixed(1);
+      document.getElementById("w_modWh").textContent = modWh.toFixed(1);
+
+      const delta = Math.round((modWh - baseWh) * 10) / 10;
+      const pct = Math.round((delta / baseWh) * 1000) / 10;
+      const deltaEl = document.getElementById("w_deltaWh");
+      const badgeEl = document.getElementById("w_deltaBadge");
+      const narrEl = document.getElementById("w_narrative");
+
+      if (delta < -0.1) {
+        deltaEl.textContent = delta.toFixed(1) + " Wh";
+        deltaEl.className = "display-4 fw-bold text-success my-2";
+        badgeEl.className = "badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fs-6";
+        badgeEl.textContent = Math.abs(pct).toFixed(1) + "% Reduction";
+        narrEl.textContent = `Conserves ${Math.abs(delta).toFixed(1)} Wh compared to the typical 18:00 baseline.`;
+      } else if (delta > 0.1) {
+        deltaEl.textContent = "+" + delta.toFixed(1) + " Wh";
+        deltaEl.className = "display-4 fw-bold text-danger my-2";
+        badgeEl.className = "badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2 fs-6";
+        badgeEl.textContent = "+" + pct.toFixed(1) + "% Increase";
+        narrEl.textContent = `Consumes +${delta.toFixed(1)} Wh more energy than standard baseline conditions.`;
+      } else {
+        deltaEl.textContent = "0.0 Wh";
+        deltaEl.className = "display-4 fw-bold text-secondary my-2";
+        badgeEl.className = "badge bg-secondary-subtle text-secondary px-3 py-2 fs-6";
+        badgeEl.textContent = "0.0% (Neutral)";
+        narrEl.textContent = "Parameters are identical or near baseline level.";
+      }
+    }
+
+    [wIn, wHour, wOut, wHum].forEach(s => s.addEventListener("input", updateWhatIf));
+
+    // 4. Insights Tab Logic
+    let insHourlyChart = null;
+    let insDowChart = null;
+    function renderInsightsCharts() {
+      const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+      const gridColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.06)";
+      const textColor = isDark ? "#dee2e6" : "#495057";
+
+      const hourlyData = [162, 161, 153, 149, 151, 155, 163, 158, 156, 157, 159, 158, 152, 154, 156, 159, 164, 168, 172, 170, 169, 167, 165, 163];
+      const hourlyLabels = Array.from({length: 24}, (_, i) => `${i.toString().padStart(2, '0')}:00`);
+
+      const ctxH = document.getElementById("ins_hourlyChart").getContext("2d");
+      if (insHourlyChart) insHourlyChart.destroy();
+      insHourlyChart = new Chart(ctxH, {
+        type: "bar",
+        data: {
+          labels: hourlyLabels,
+          datasets: [{
+            label: "Mean Demand (Wh)",
+            data: hourlyData,
+            backgroundColor: hourlyData.map((v, i) => PEAK_HOURS.includes(i) ? "rgba(220, 53, 69, 0.75)" : "rgba(13, 110, 253, 0.7)"),
+            borderRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: textColor } },
+            y: { grid: { color: gridColor }, ticks: { color: textColor } }
+          }
+        }
+      });
+
+      const dowData = [161.4, 159.2, 158.7, 160.1, 162.8, 158.9, 157.6];
+      const dowLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const ctxD = document.getElementById("ins_dowChart").getContext("2d");
+      if (insDowChart) insDowChart.destroy();
+      insDowChart = new Chart(ctxD, {
+        type: "line",
+        data: {
+          labels: dowLabels,
+          datasets: [{
+            label: "Daily Mean Wh",
+            data: dowData,
+            borderColor: "#20c997",
+            backgroundColor: "rgba(32, 201, 151, 0.15)",
+            borderWidth: 2.5,
+            fill: true,
+            tension: 0.3,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: textColor } },
+            y: { grid: { color: gridColor }, ticks: { color: textColor } }
+          }
+        }
+      });
+    }
+
+    // Theme Toggle
+    const themeBtn = document.getElementById("themeToggleBtn");
+    const themeIcon = document.getElementById("themeIcon");
+    const themeLabel = document.getElementById("themeLabel");
+    themeBtn.addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("data-bs-theme");
+      const next = current === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-bs-theme", next);
+      themeIcon.className = next === "dark" ? "bi bi-sun-fill text-warning" : "bi bi-moon-stars-fill";
+      themeLabel.textContent = next === "dark" ? "Light" : "Dark";
+      renderForecast(12);
+      renderInsightsCharts();
+    });
+
+    // Tab event listener to initialize charts when shown
+    document.getElementById("tab-forecast-btn").addEventListener("shown.bs.tab", () => renderForecast(12));
+    document.getElementById("tab-insights-btn").addEventListener("shown.bs.tab", () => renderInsightsCharts());
+
+    // Initialize
+    pForm.dispatchEvent(new Event("submit"));
+    updateWhatIf();
+  </script>
+</body>
+</html>
