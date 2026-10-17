@@ -1,4 +1,4 @@
-# Production Multi-Stage Dockerfile for Wattsmart 2.0
+# Production Dockerfile for Wattsmart 2.0 (Compatible with Local, Docker Compose & Hugging Face Spaces)
 FROM python:3.11-slim AS base
 
 # Install system dependencies (libgomp1 required for XGBoost and LightGBM)
@@ -7,9 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user and group for security
-RUN groupadd -g 1000 appgroup && \
-    useradd -u 1000 -g appgroup -s /bin/bash -m appuser
+# Create non-root user (uid 1000 is required for Hugging Face Spaces)
+RUN useradd -m -u 1000 appuser
 
 WORKDIR /app
 
@@ -28,24 +27,22 @@ COPY docs/ docs/
 # Install wattsmart package
 RUN pip install --no-cache-dir -e . --no-deps
 
-# Set ownership to non-root user
-RUN chown -R appuser:appgroup /app
+# Set permissions
+RUN chown -R appuser:appuser /app
 
-# Switch to non-root user
 USER appuser
 
-# Environment variables
+# Environment variables (Port 7860 is native Hugging Face Spaces port)
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     APP_ENV=production \
     HOST=0.0.0.0 \
-    PORT=5000
+    PORT=7860
 
-EXPOSE 5000
+EXPOSE 7860
 
-# Docker healthcheck probe
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:5000/health || exit 1
+    CMD curl -f http://localhost:7860/health || exit 1
 
-# Production WSGI server
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "60", "app.main:create_app()"]
+# Run Gunicorn on port 7860
+CMD ["gunicorn", "--bind", "0.0.0.0:7860", "--workers", "2", "--timeout", "60", "app.main:create_app()"]

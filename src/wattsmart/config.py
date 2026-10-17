@@ -36,7 +36,7 @@ FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 APP_ENV = os.getenv("APP_ENV", "production")
 DEBUG = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
 HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "5000"))
+PORT = int(os.getenv("PORT", "7860" if os.getenv("SPACE_ID") else "5000"))
 SECRET_KEY = os.getenv("SECRET_KEY", "wattsmart-production-secret-key-42")
 CORS_ORIGINS = [
     origin.strip()

@@ -94,9 +94,10 @@
         </ul>
 
         <div class="d-flex align-items-center gap-3">
-          <div class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small">
-            <i class="bi bi-check-circle me-1"></i> Client ML Engine Active
-          </div>
+          <button id="btnBackendConfig" class="btn btn-sm btn-outline-info rounded-pill px-3 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#backendModal">
+            <i class="bi bi-hdd-network text-info" id="backendStatusIcon"></i>
+            <span id="backendStatusLabel" style="font-size: 0.82rem;">Backend: In-Browser (Connect Cloud)</span>
+          </button>
           <button id="themeToggleBtn" class="btn btn-sm btn-outline-light rounded-pill px-3 d-flex align-items-center gap-2">
             <i id="themeIcon" class="bi bi-moon-stars-fill"></i>
             <span id="themeLabel" style="font-size: 0.85rem;">Dark</span>
@@ -1028,6 +1029,90 @@
       renderInsightsCharts();
     });
 
+    // --- Backend API Connection & Auto-Fallback Logic ---
+    let activeBackendUrl = localStorage.getItem("wattsmart_backend_url") || "";
+
+    function updateBackendBadge(isLive, url) {
+      const label = document.getElementById("backendStatusLabel");
+      const icon = document.getElementById("backendStatusIcon");
+      const btn = document.getElementById("btnBackendConfig");
+
+      if (isLive && url) {
+        label.textContent = "Backend: Live Cloud API (" + (url.includes("hf.space") ? "Hugging Face" : "Connected") + ")";
+        icon.className = "bi bi-cloud-check-fill text-success";
+        btn.className = "btn btn-sm btn-outline-success rounded-pill px-3 d-flex align-items-center gap-2";
+      } else {
+        label.textContent = "Backend: In-Browser (Connect Cloud)";
+        icon.className = "bi bi-hdd-network text-info";
+        btn.className = "btn btn-sm btn-outline-info rounded-pill px-3 d-flex align-items-center gap-2";
+      }
+    }
+
+    async function checkBackendHealth(url) {
+      if (!url) return false;
+      const cleanUrl = url.replace(/\/+$/, "");
+      try {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 4000);
+        const resp = await fetch(cleanUrl + "/health", { signal: ctrl.signal });
+        clearTimeout(timeout);
+        if (resp.ok) {
+          const json = await resp.json();
+          return json.status === "healthy" || json.model_loaded === true;
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    window.setBackendPreset = function(presetUrl) {
+      document.getElementById("customApiUrl").value = presetUrl;
+    };
+
+    document.getElementById("btnTestBackend").addEventListener("click", async () => {
+      const urlInput = document.getElementById("customApiUrl").value.trim().replace(/\/+$/, "");
+      const resDiv = document.getElementById("backendPingResult");
+      const btn = document.getElementById("btnTestBackend");
+
+      btn.disabled = true;
+      btn.textContent = "Testing...";
+      resDiv.className = "alert alert-secondary py-2 px-3 small";
+      resDiv.classList.remove("d-none");
+      resDiv.textContent = "Pinging " + (urlInput || "In-Browser") + "...";
+
+      if (!urlInput) {
+        activeBackendUrl = "";
+        localStorage.removeItem("wattsmart_backend_url");
+        updateBackendBadge(false, "");
+        resDiv.className = "alert alert-info py-2 px-3 small";
+        resDiv.textContent = "Switched to built-in In-Browser ML Engine (Offline Zero-Latency).";
+        btn.disabled = false;
+        btn.textContent = "Test & Connect";
+        return;
+      }
+
+      const isLive = await checkBackendHealth(urlInput);
+      if (isLive) {
+        activeBackendUrl = urlInput;
+        localStorage.setItem("wattsmart_backend_url", urlInput);
+        updateBackendBadge(true, urlInput);
+        resDiv.className = "alert alert-success py-2 px-3 small";
+        resDiv.textContent = "Successfully connected to Live Backend API at " + urlInput + "!";
+      } else {
+        resDiv.className = "alert alert-warning py-2 px-3 small";
+        resDiv.innerHTML = "Could not reach backend at " + urlInput + ". If using a free Hugging Face Space, it may be waking up from sleep (wait 15s) or verify CORS.<br><em>Falling back to In-Browser Engine.</em>";
+      }
+      btn.disabled = false;
+      btn.textContent = "Test & Connect";
+    });
+
+    // Check configured backend on page load
+    if (activeBackendUrl) {
+      document.getElementById("customApiUrl").value = activeBackendUrl;
+      checkBackendHealth(activeBackendUrl).then(live => updateBackendBadge(live, activeBackendUrl));
+    }
+
     // Tab event listener to initialize charts when shown
     document.getElementById("tab-forecast-btn").addEventListener("shown.bs.tab", () => renderForecast(12));
     document.getElementById("tab-insights-btn").addEventListener("shown.bs.tab", () => renderInsightsCharts());
@@ -1036,5 +1121,51 @@
     pForm.dispatchEvent(new Event("submit"));
     updateWhatIf();
   </script>
+
+  <!-- Cloud Backend Configuration Modal -->
+  <div class="modal fade" id="backendModal" tabindex="-1" aria-labelledby="backendModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold" id="backendModalLabel">
+            <i class="bi bi-hdd-network text-primary me-2"></i> Connect Cloud Backend
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-body-secondary mb-3">
+            Deploy the Wattsmart Python Docker container to <strong>Hugging Face Spaces</strong> (100% free), then paste your Space URL here to route live requests to your cloud ML backend.
+          </p>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">API Base URL</label>
+            <input type="url" id="customApiUrl" class="form-control" placeholder="https://<username>-wattsmart-api.hf.space">
+            <div class="form-text">Leave blank to use the offline In-Browser ML engine.</div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setBackendPreset('https://snehadeepika-wattsmart-api.hf.space')">
+              <i class="bi bi-stars me-1"></i> HF Preset
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setBackendPreset('http://127.0.0.1:5000')">
+              <i class="bi bi-laptop me-1"></i> Localhost (5000)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setBackendPreset('')">
+              <i class="bi bi-cpu me-1"></i> In-Browser Engine
+            </button>
+          </div>
+
+          <div id="backendPingResult" class="d-none"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Close</button>
+          <button type="button" id="btnTestBackend" class="btn btn-primary btn-sm rounded-pill px-3">
+            <i class="bi bi-link-45deg me-1"></i> Test & Connect
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
